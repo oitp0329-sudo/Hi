@@ -1,0 +1,158 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global safety net: deny everything by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidTimestamp(ts) {
+      return ts is timestamp && ts <= request.time;
+    }
+
+    function isValidUserProfile(data, userId) {
+      return data.userId is string && data.userId == userId &&
+             data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 80 &&
+             (!('email' in data) || (data.email is string && data.email.size() <= 160)) &&
+             data.planTier in ['FREE', 'PREMIUM'] &&
+             data.cloudSyncEnabled is bool &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidWalletDocument(data, userId) {
+      return data.userId is string && data.userId == userId &&
+             data.title is string && data.title.size() >= 1 && data.title.size() <= 120 &&
+             data.category in ['PASSPORT', 'DRIVING_LICENCE', 'IDENTITY', 'INSURANCE', 'CERTIFICATES', 'EDUCATIONAL', 'WARRANTY', 'SUBSCRIPTIONS', 'OTHER'] &&
+             (!('notes' in data) || (data.notes is string && data.notes.size() <= 500)) &&
+             (!('issueDateMillis' in data) || (data.issueDateMillis is int && data.issueDateMillis >= 0)) &&
+             data.expiryDateMillis is int && data.expiryDateMillis >= 0 &&
+             data.reminderOffsetsCsv is string && data.reminderOffsetsCsv.size() >= 1 && data.reminderOffsetsCsv.size() <= 64 &&
+             data.renewed is bool &&
+             (!('lastRenewedAtMillis' in data) || (data.lastRenewedAtMillis is int && data.lastRenewedAtMillis >= 0)) &&
+             (!('renewalHistorySummary' in data) || (data.renewalHistorySummary is string && data.renewalHistorySummary.size() <= 500)) &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidSmartPreset(data, userId) {
+      return data.userId is string && data.userId == userId &&
+             data.name is string && data.name.size() >= 1 && data.name.size() <= 80 &&
+             data.targetFormat in ['JPG', 'PNG', 'WEBP', 'PDF'] &&
+             data.maxSizeBytes is int && data.maxSizeBytes > 0 && data.maxSizeBytes <= 524288000 &&
+             data.minWidthPx is int && data.minWidthPx >= 0 && data.minWidthPx <= 20000 &&
+             data.maxWidthPx is int && data.maxWidthPx >= 0 && data.maxWidthPx <= 20000 &&
+             data.minHeightPx is int && data.minHeightPx >= 0 && data.minHeightPx <= 20000 &&
+             data.maxHeightPx is int && data.maxHeightPx >= 0 && data.maxHeightPx <= 20000 &&
+             (!('aspectRatio' in data) || (data.aspectRatio is string && data.aspectRatio.size() <= 24)) &&
+             (!('pdfPageSize' in data) || (data.pdfPageSize is string && data.pdfPageSize.size() <= 24)) &&
+             data.qualityPercent is int && data.qualityPercent >= 10 && data.qualityPercent <= 100 &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidFeedback(data, userId) {
+      return data.userId is string && data.userId == userId &&
+             data.category in ['BUG', 'FEATURE', 'BILLING', 'OTHER'] &&
+             data.subject is string && data.subject.size() >= 1 && data.subject.size() <= 120 &&
+             data.message is string && data.message.size() >= 1 && data.message.size() <= 1500 &&
+             data.appVersion is string && data.appVersion.size() >= 1 && data.appVersion.size() <= 40 &&
+             isValidTimestamp(data.createdAt);
+    }
+
+    match /users/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow list: if false;
+
+      allow create: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       incoming().keys().hasAll(['userId', 'displayName', 'planTier', 'cloudSyncEnabled', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'displayName', 'email', 'planTier', 'cloudSyncEnabled', 'createdAt', 'updatedAt']) &&
+                       isValidUserProfile(incoming(), userId);
+
+      allow update: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       isValidUserProfile(incoming(), userId) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'email', 'planTier', 'cloudSyncEnabled', 'updatedAt']);
+
+      allow delete: if isOwner(userId) && isValidId(userId);
+
+      match /walletDocuments/{docId} {
+        allow get: if isOwner(userId) && isValidId(docId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(docId) &&
+                         incoming().keys().hasAll(['userId', 'title', 'category', 'expiryDateMillis', 'reminderOffsetsCsv', 'renewed', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'title', 'category', 'notes', 'issueDateMillis', 'expiryDateMillis', 'reminderOffsetsCsv', 'renewed', 'lastRenewedAtMillis', 'renewalHistorySummary', 'createdAt', 'updatedAt']) &&
+                         isValidWalletDocument(incoming(), userId);
+
+        allow update: if isOwner(userId) &&
+                         isValidId(docId) &&
+                         isValidWalletDocument(incoming(), userId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['title', 'category', 'notes', 'issueDateMillis', 'expiryDateMillis', 'reminderOffsetsCsv', 'renewed', 'lastRenewedAtMillis', 'renewalHistorySummary', 'updatedAt']);
+
+        allow delete: if isOwner(userId) && isValidId(docId);
+      }
+
+      match /smartPresets/{presetId} {
+        allow get: if isOwner(userId) && isValidId(presetId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(presetId) &&
+                         incoming().keys().hasAll(['userId', 'name', 'targetFormat', 'maxSizeBytes', 'minWidthPx', 'maxWidthPx', 'minHeightPx', 'maxHeightPx', 'qualityPercent', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'name', 'targetFormat', 'maxSizeBytes', 'minWidthPx', 'maxWidthPx', 'minHeightPx', 'maxHeightPx', 'aspectRatio', 'pdfPageSize', 'qualityPercent', 'createdAt', 'updatedAt']) &&
+                         isValidSmartPreset(incoming(), userId);
+
+        allow update: if isOwner(userId) &&
+                         isValidId(presetId) &&
+                         isValidSmartPreset(incoming(), userId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['name', 'targetFormat', 'maxSizeBytes', 'minWidthPx', 'maxWidthPx', 'minHeightPx', 'maxHeightPx', 'aspectRatio', 'pdfPageSize', 'qualityPercent', 'updatedAt']);
+
+        allow delete: if isOwner(userId) && isValidId(presetId);
+      }
+
+      match /feedback/{feedbackId} {
+        allow get: if isOwner(userId) && isValidId(feedbackId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(feedbackId) &&
+                         incoming().keys().hasAll(['userId', 'category', 'subject', 'message', 'appVersion', 'createdAt']) &&
+                         incoming().keys().hasOnly(['userId', 'category', 'subject', 'message', 'appVersion', 'createdAt']) &&
+                         isValidFeedback(incoming(), userId);
+
+        allow update: if false;
+        allow delete: if isOwner(userId) && isValidId(feedbackId);
+      }
+    }
+  }
+}

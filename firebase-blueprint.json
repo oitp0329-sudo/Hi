@@ -1,0 +1,96 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Synced FileDude user account profile and plan preference metadata.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Firebase Auth UID of the owner." },
+        "displayName": { "type": "string", "description": "User display name (1..80 chars)." },
+        "email": { "type": "string", "description": "Optional verified email address." },
+        "planTier": { "type": "string", "enum": ["FREE", "PREMIUM"], "description": "Last verified plan tier." },
+        "cloudSyncEnabled": { "type": "boolean", "description": "Whether cloud sync is enabled." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp on creation." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp on update." }
+      },
+      "required": ["userId", "displayName", "planTier", "cloudSyncEnabled", "createdAt", "updatedAt"]
+    },
+    "WalletDocumentSync": {
+      "title": "WalletDocumentSync",
+      "description": "Synced Document Wallet metadata and expiry reminder schedule (binary files stay private on device).",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Firebase Auth UID of the owner." },
+        "title": { "type": "string", "description": "Document title (1..120 chars)." },
+        "category": {
+          "type": "string",
+          "enum": ["PASSPORT", "DRIVING_LICENCE", "IDENTITY", "INSURANCE", "CERTIFICATES", "EDUCATIONAL", "WARRANTY", "SUBSCRIPTIONS", "OTHER"],
+          "description": "Wallet category."
+        },
+        "notes": { "type": "string", "description": "Optional private notes (0..500 chars)." },
+        "issueDateMillis": { "type": "integer", "description": "Optional issue timestamp in millis." },
+        "expiryDateMillis": { "type": "integer", "description": "Expiry timestamp in epoch millis." },
+        "reminderOffsetsCsv": { "type": "string", "description": "Comma-separated reminder days before expiry." },
+        "renewed": { "type": "boolean", "description": "Whether document has been marked renewed." },
+        "lastRenewedAtMillis": { "type": "integer", "description": "Optional renewal timestamp in millis." },
+        "renewalHistorySummary": { "type": "string", "description": "Optional summary of renewal events (0..500 chars)." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp on creation." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp on update." }
+      },
+      "required": ["userId", "title", "category", "expiryDateMillis", "reminderOffsetsCsv", "renewed", "createdAt", "updatedAt"]
+    },
+    "SmartPresetSync": {
+      "title": "SmartPresetSync",
+      "description": "User-saved Smart File Ready requirement preset.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Firebase Auth UID of the owner." },
+        "name": { "type": "string", "description": "Preset name (1..80 chars)." },
+        "targetFormat": { "type": "string", "enum": ["JPG", "PNG", "WEBP", "PDF"], "description": "Required output format." },
+        "maxSizeBytes": { "type": "integer", "description": "Maximum allowed file size in bytes." },
+        "minWidthPx": { "type": "integer", "description": "Minimum width in pixels (0 if unconstrained)." },
+        "maxWidthPx": { "type": "integer", "description": "Maximum width in pixels (0 if unconstrained)." },
+        "minHeightPx": { "type": "integer", "description": "Minimum height in pixels (0 if unconstrained)." },
+        "maxHeightPx": { "type": "integer", "description": "Maximum height in pixels (0 if unconstrained)." },
+        "aspectRatio": { "type": "string", "description": "Optional aspect ratio label (e.g. 35:45)." },
+        "pdfPageSize": { "type": "string", "description": "Optional PDF page size (A4, LETTER, ORIGINAL)." },
+        "qualityPercent": { "type": "integer", "description": "Preferred initial quality (10..100)." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp on creation." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp on update." }
+      },
+      "required": ["userId", "name", "targetFormat", "maxSizeBytes", "minWidthPx", "maxWidthPx", "minHeightPx", "maxHeightPx", "qualityPercent", "createdAt", "updatedAt"]
+    },
+    "FeedbackSubmission": {
+      "title": "FeedbackSubmission",
+      "description": "User-submitted support or feature feedback.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Firebase Auth UID of the submitter." },
+        "category": { "type": "string", "enum": ["BUG", "FEATURE", "BILLING", "OTHER"], "description": "Feedback category." },
+        "subject": { "type": "string", "description": "Feedback subject (1..120 chars)." },
+        "message": { "type": "string", "description": "Feedback body (1..1500 chars)." },
+        "appVersion": { "type": "string", "description": "App version string." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp on creation." }
+      },
+      "required": ["userId", "category", "subject", "message", "appVersion", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Private user account profile document."
+    },
+    "/users/{userId}/walletDocuments/{docId}": {
+      "schema": { "$ref": "#/entities/WalletDocumentSync" },
+      "description": "User-scoped Document Wallet metadata records."
+    },
+    "/users/{userId}/smartPresets/{presetId}": {
+      "schema": { "$ref": "#/entities/SmartPresetSync" },
+      "description": "User-scoped custom Smart File Ready presets."
+    },
+    "/users/{userId}/feedback/{feedbackId}": {
+      "schema": { "$ref": "#/entities/FeedbackSubmission" },
+      "description": "User-scoped feedback submissions."
+    }
+  }
+}

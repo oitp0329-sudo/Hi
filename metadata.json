@@ -1,0 +1,8 @@
+{
+  "name": "Remix Remix FileDude",
+  "description": "Offline-first PDF, Image, Video, Smart File Ready, and Document Wallet tools.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
