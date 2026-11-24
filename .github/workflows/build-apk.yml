@@ -59,8 +59,23 @@ jobs:
         with:
           gradle-version: '9.3.1'
 
+      - name: Ensure google-services.json is present for resource generation
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            printf '%s' "$GOOGLE_SERVICES_JSON" > app/google-services.json
+            echo "CI_GOOGLE_SERVICES_MODE=secret" >> "$GITHUB_ENV"
+          elif [ -f app/google-services.json ]; then
+            echo "CI_GOOGLE_SERVICES_MODE=repo" >> "$GITHUB_ENV"
+          else
+            echo "CI_GOOGLE_SERVICES_MODE=placeholder" >> "$GITHUB_ENV"
+            python3 -c 'import json; json.dump({"project_info":{"project_number":"1234567890","project_id":"ci-placeholder-project"},"client":[{"client_info":{"mobilesdk_app_id":"1:1234567890:android:ciplaceholder","android_client_info":{"package_name":"com.aistudio.filedude.lmsxhy"}},"oauth_client":[{"client_id":"1234567890-ciplaceholder.apps.googleusercontent.com","client_type":3}],"api_key":[{"current_key":"ci-placeholder-key"}]}],"configuration_version":"1"}, open("app/google-services.json","w"), indent=2)'
+            echo "::warning::app/google-services.json was missing in this repo; using a CI placeholder so the APK compiles. Add GOOGLE_SERVICES_JSON in GitHub Secrets for Google Sign-In/Firestore/AI Logic."
+          fi
+
       - name: Build Android Debug APK
-        run: gradle :app:assembleDebug --no-daemon --max-workers=2 -Dorg.gradle.jvmargs="-Xmx2560m -XX:MaxMetaspaceSize=768m -Dfile.encoding=UTF-8" --stacktrace
+        run: gradle :app:assembleDebug --no-daemon --max-workers=2 -Dorg.gradle.jvmargs="-Xmx3g -XX:MaxMetaspaceSize=768m -Djava.awt.headless=true -Dfile.encoding=UTF-8" --stacktrace
 
       - name: Verify Debug APK exists, is signed, and has valid manifest
         run: |
@@ -92,7 +107,7 @@ jobs:
           tag_name: latest-debug
           name: FileDude Latest Debug APK
           body: |
-            Direct APK download for manual Android testing (`com.aistudio.filedude.qrxmzk`).
+            Direct APK download for manual Android testing (`com.aistudio.filedude.lmsxhy`).
             Tap **app-debug.apk** below to download directly to your phone without unzipping.
           files: app/build/outputs/apk/debug/app-debug.apk
           prerelease: true
@@ -104,6 +119,9 @@ jobs:
             echo ""
             echo "- **Direct APK URL (if Release published in repo):** https://github.com/${{ github.repository }}/releases/download/latest-debug/app-debug.apk"
             echo "- **Workflow Artifact (zip):** Open **Artifacts → FileDude-Debug-APK** on this run summary page."
+            if [ "${CI_GOOGLE_SERVICES_MODE:-repo}" = "placeholder" ]; then
+              echo "- **Firebase Note:** Built with a placeholder \`google-services.json\` because \`app/google-services.json\` was missing in the repository. Add \`GOOGLE_SERVICES_JSON\` in GitHub Secrets (or download the APK directly from AI Studio) for live Google Sign-In, Firestore sync, and AI Logic."
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Build & verify signed Release APK and Internal AAB (when release secrets are set)
@@ -115,7 +133,7 @@ jobs:
         run: |
           if [ -n "$RELEASE_KEYSTORE_BASE64" ] && [ -n "$STORE_PASSWORD" ] && [ -n "$KEY_PASSWORD" ]; then
             echo "$RELEASE_KEYSTORE_BASE64" | base64 -d > "$KEYSTORE_PATH"
-            gradle :app:generateSignedReleaseApk :app:bundleRelease --no-daemon --max-workers=2 -Dorg.gradle.jvmargs="-Xmx2560m -XX:MaxMetaspaceSize=768m -Dfile.encoding=UTF-8" --stacktrace
+            gradle :app:generateSignedReleaseApk :app:bundleRelease --no-daemon --max-workers=2 -Dorg.gradle.jvmargs="-Xmx3g -XX:MaxMetaspaceSize=768m -Djava.awt.headless=true -Dfile.encoding=UTF-8" --stacktrace
             SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
             APKSIGNER=$(find -L "$SDK_ROOT/build-tools" -name apksigner -type f 2>/dev/null | sort -V | tail -n 1 || true)
             if [ -n "$APKSIGNER" ]; then
@@ -179,4 +197,4 @@ jobs:
           gradle-version: '9.3.1'
 
       - name: Run unit & Robolectric tests
-        run: gradle :app:testDebugUnitTest --no-daemon --max-workers=2 -Dorg.gradle.jvmargs="-Xmx2560m -XX:MaxMetaspaceSize=768m -Dfile.encoding=UTF-8" --stacktrace
+        run: gradle :app:testDebugUnitTest --no-daemon --max-workers=2 -Dorg.gradle.jvmargs="-Xmx3g -XX:MaxMetaspaceSize=768m -Djava.awt.headless=true -Dfile.encoding=UTF-8" --stacktrace
